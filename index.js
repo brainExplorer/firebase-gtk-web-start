@@ -4,8 +4,24 @@ import './style.css';
 import { initializeApp } from 'firebase/app';
 
 // Add the Firebase products and methods that you want to use
-import {} from 'firebase/auth';
-import {} from 'firebase/firestore';
+import { getAuth, EmailAuthProvider } from 'firebase/auth';
+import {
+  getAuth,
+  EmailAuthProvider,
+  signOut,
+  onAuthStateChanged
+} from 'firebase/auth';
+
+import {
+  getFirestore,
+  addDoc,
+  collection,
+  query,
+  orderBy,
+  onSnapshot
+} from 'firebase/firestore';
+
+
 
 import * as firebaseui from 'firebaseui';
 
@@ -45,6 +61,125 @@ async function main() {
   
   };
   // initializeApp(firebaseConfig);
+  initializeApp(firebaseConfig);
+  auth = getAuth();
+// save a reference to the Firestore db object right after initializeApp
+  db = getFirestore();
+
+   // Listen to RSVP button clicks
+  startRsvpButton.addEventListener("click",
+   () => {
+        ui.start("#firebaseui-auth-container", uiConfig);
+  });
+  // Called when the user clicks the RSVP button
+startRsvpButton.addEventListener('click', () => {
+  if (auth.currentUser) {
+    // User is signed in; allows user to sign out
+    signOut(auth);
+  } else {
+    // No user is signed in; allows user to sign in
+    ui.start('#firebaseui-auth-container', uiConfig);
+  }
+});
+
+  // Listen to the current Auth state
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      startRsvpButton.textContent = 'LOGOUT';
+    } else {
+      startRsvpButton.textContent = 'RSVP';
+    }
+  });
+
+  // Listen to the form submission
+  form.addEventListener('submit', async e => {
+    // Prevent the default form redirect
+    e.preventDefault();
+    // Write a new message to the database collection "guestbook"
+    addDoc(collection(db, 'guestbook'), {
+      text: input.value,
+      timestamp: Date.now(),
+      name: auth.currentUser.displayName,
+      userId: auth.currentUser.uid
+    });
+    // clear message input field
+    input.value = '';
+    // Return false to avoid redirect
+    return false;
+  });
+// Listen to the current Auth state
+onAuthStateChanged(auth, user => {
+  if (user) {
+    startRsvpButton.textContent = 'LOGOUT';
+    // Show guestbook to logged-in users
+    guestbookContainer.style.display = 'block';
+  } else {
+    startRsvpButton.textContent = 'RSVP';
+    // Hide guestbook for non-logged-in users
+    guestbookContainer.style.display = 'none';
+  }
+});
+<section id="guestbook-container">
+<h2>Discussion</h2>
+
+<form></form>
+
+<section id="guestbook"></section>
+
+</section>
+ // Create query for messages
+ const q = query(collection(db, 'guestbook'), orderBy('timestamp', 'desc'));
+ onSnapshot(q, snaps => {
+   // Reset page
+   guestbook.innerHTML = '';
+   // Loop through documents in database
+   snaps.forEach(doc => {
+     // Create an HTML entry for each document and add it to the chat
+     const entry = document.createElement('p');
+     entry.textContent = doc.data().name + ': ' + doc.data().text;
+     guestbook.appendChild(entry);
+   });
+ });
+
+// Listen to guestbook updates
+ function subscribeGuestbook() {
+  const q = query(collection(db, 'guestbook'), orderBy('timestamp', 'desc'));
+  guestbookListener = onSnapshot(q, snaps => {
+    // Reset page
+    guestbook.innerHTML = '';
+    // Loop through documents in database
+    snaps.forEach(doc => {
+      // Create an HTML entry for each document and add it to the chat
+      const entry = document.createElement('p');
+      entry.textContent = doc.data().name + ': ' + doc.data().text;
+      guestbook.appendChild(entry);
+    });
+  });
+}
+// Unsubscribe from guestbook updates
+function unsubscribeGuestbook() {
+  if (guestbookListener != null) {
+    guestbookListener();
+    guestbookListener = null;
+  }
+}
+// Listen to the current Auth state
+onAuthStateChanged(auth, user => {
+  if (user) {
+    startRsvpButton.textContent = 'LOGOUT';
+    // Show guestbook to logged-in users
+    guestbookContainer.style.display = 'block';
+    // Subscribe to the guestbook collection
+    subscribeGuestbook();
+  } else {
+    startRsvpButton.textContent = 'RSVP';
+    // Hide guestbook for non-logged-in users
+    guestbookContainer.style.display = 'none';
+    // Unsubscribe from the guestbook collection
+    unsubscribeGuestbook();
+  }
+});
+
 
   // FirebaseUI config
   const uiConfig = {
@@ -56,12 +191,13 @@ async function main() {
     callbacks: {
       signInSuccessWithAuthResult: function (authResult, redirectUrl) {
         // Handle sign-in.
+
         // Return false to avoid redirect.
         return false;
       },
     },
   };
 
-  // const ui = new firebaseui.auth.AuthUI(auth);
+   const ui = new firebaseui.auth.AuthUI(auth);
 }
 main();
